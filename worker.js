@@ -1,23 +1,24 @@
-const headers={"content-type":"application/json;charset=utf-8","access-control-allow-origin":"*","access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type"};
-const PLACES=["札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉"];
-const GRADE_RE=/(G1|G2|G3|ＧⅠ|ＧⅡ|ＧⅢ|GI|GII|GIII|Jpn1|Jpn2|Jpn3|重賞)/i;
-function pad(n){return String(n).padStart(2,"0")}
-function fmt(d){return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`}
-function ymd(d){return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`}
-function calendarUrl(d){return `https://www.jra.go.jp/keiba/calendar${d.getFullYear()}/${d.getFullYear()}/${d.getMonth()+1}/${pad(d.getMonth()+1)}${pad(d.getDate())}.html`}
-function nextWeekend(base=new Date()){const jst=new Date(base.toLocaleString("en-US",{timeZone:"Asia/Tokyo"}));const day=jst.getDay();let sat=new Date(jst);sat.setHours(0,0,0,0);sat.setDate(jst.getDate()+((6-day+7)%7));let sun=new Date(sat);sun.setDate(sat.getDate()+1);return [sat,sun]}
-function stripTags(s){return s.replace(/<script[\s\S]*?<\/script>/gi," ").replace(/<style[\s\S]*?<\/style>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ").trim()}
-function decode(buf){try{return new TextDecoder("shift_jis").decode(buf)}catch(e){return new TextDecoder("utf-8").decode(buf)}}
-function shouldKeep(r){const name=`${r.raceName||""} ${r.grade||""} ${r.condition||""} ${r.age||""}`;if(/新馬|メイクデビュー|未勝利/.test(name))return false;if(/2歳|２歳/.test(name)&&!GRADE_RE.test(name))return false;return true}
-function guessGrade(text){if(/G1|ＧⅠ|GI/.test(text))return "G1";if(/G2|ＧⅡ|GII/.test(text))return "G2";if(/G3|ＧⅢ|GIII/.test(text))return "G3";if(/リステッド|\(L\)|（L）/.test(text))return "L";if(/オープン|OP/.test(text))return "OP";if(/3勝|３勝/.test(text))return "3勝";if(/2勝|２勝/.test(text))return "2勝";if(/1勝|１勝/.test(text))return "1勝";if(/未勝利/.test(text))return "未勝利";if(/新馬/.test(text))return "新馬";return ""}
-function guessSurface(text){if(/障害/.test(text))return "障害";if(/ダート|（ダ）|\(ダ\)|ダ[0-9]/.test(text))return "ダ";if(/芝|（芝）|\(芝\)|芝[0-9]/.test(text))return "芝";return ""}
-function guessDistance(text){const m=text.match(/([12][0-9]{3}|3[0-6][0-9]{2})/);return m?`${m[1]}m`:""}
-function guessCondition(text){if(/ハンデ/.test(text))return "ハンデ";if(/別定/.test(text))return "別定";if(/馬齢/.test(text))return "馬齢";if(/定量/.test(text))return "定量";return ""}
-function guessAge(text){const m=text.match(/([234５４３２]歳(?:以上)?|２歳|３歳|４歳以上|3歳以上|4歳以上|2歳)/);return m?m[1].replace(/[２３４５]/g,c=>({"２":"2","３":"3","４":"4","５":"5"}[c])):""}
-function fallbackHorses(n=12,raceNo=1){return Array.from({length:n},(_,i)=>({frame:String(Math.min(8,Math.ceil((i+1)/2))),no:String(i+1),name:`取得待ち_${raceNo}_${i+1}`,last1:String([1,5,9,4,6,8,3,2,7][i%9]),last2:String([4,1,5,9,4,6,8,3,2][i%9]),last3:String([9,4,1,5,9,4,6,8,3][i%9]),odds:""}))}
-function fallbackForDate(d){const date=fmt(d);const places=["東京","京都","新潟"];const names={9:"特別戦",10:"特別戦",11:"メインレース",12:"最終レース"};const out=[];for(const place of places){for(let no=6;no<=12;no++){const r={date,place,raceNo:String(no),raceName:`${no}R ${names[no]||"条件戦"}`,grade:no===11?"OP":(no>=10?"3勝":"2勝"),condition:no===11?"別定":"定量",surface:"芝",distance:no===10?"1800m":"1600m",headcount:no===10?"18":"12"};out.push({race:r,horses:fallbackHorses(Number(r.headcount),no),source:"fallback"})}}return out}
-function parseCalendar(html,date){const text=stripTags(html);let activePlaces=PLACES.filter(p=>text.includes(p));if(!activePlaces.length)activePlaces=["東京","京都","新潟"].filter(p=>text.includes(p));const chunks=text.split(/(?=\b(?:1|2|3|4|5|6|7|8|9|10|11|12)R\b|(?:^|\s)(?:1|2|3|4|5|6|7|8|9|10|11|12)\s)/);
-const races=[];for(const place of activePlaces){for(let no=1;no<=12;no++){const re=new RegExp(`(?:${no}R|${no}\\s).*?(?=(?:${no+1}R|${no+1}\\s)|${place}|$)`,"i");const m=text.match(re);let chunk=m?m[0]:"";let raceName="";const nameMatch=chunk.match(/([ァ-ヶ一-龥A-Za-z0-9ー・（）()ⅠⅡⅢＬL\s]{2,40}(?:ステークス|カップ|記念|賞|特別|トライアル|ジャンプ|Ｓ|C|杯))/);if(nameMatch)raceName=nameMatch[1].trim();else if(!/新馬|未勝利/.test(chunk)) raceName=`${no}R 条件戦`;const r={date,place,raceNo:String(no),raceName:raceName||`${no}R`,grade:guessGrade(chunk),condition:guessCondition(chunk),surface:guessSurface(chunk),age:guessAge(chunk),distance:guessDistance(chunk),headcount:""};if(shouldKeep(r))races.push({race:r,horses:fallbackHorses(12,no),source:"jra-calendar"});}}
-return races}
-async function fetchDate(d){const url=calendarUrl(d);const res=await fetch(url,{headers:{"user-agent":"Mozilla/5.0"}});if(!res.ok)throw new Error(`JRA calendar ${res.status}`);const buf=await res.arrayBuffer();const html=decode(buf);let races=parseCalendar(html,fmt(d));if(!races.length)races=fallbackForDate(d).filter(x=>shouldKeep(x.race));return races}
-export default{async fetch(req){if(req.method==="OPTIONS")return new Response("{}",{headers});try{const url=new URL(req.url);let dates=[];const q=url.searchParams.get("date");if(q){dates=[new Date(q.replace(/\//g,"-"))]}else{dates=nextWeekend()}let races=[];let warnings=[];for(const d of dates){try{races.push(...await fetchDate(d))}catch(e){warnings.push(`${fmt(d)}: ${e.message}`);races.push(...fallbackForDate(d).filter(x=>shouldKeep(x.race)))}}const uniq=new Map();for(const r of races){uniq.set(`${r.race.date}_${r.race.place}_${r.race.raceNo}`,r)}races=[...uniq.values()].sort((a,b)=>`${a.race.date}${a.race.place}${String(a.race.raceNo).padStart(2,"0")}`.localeCompare(`${b.race.date}${b.race.place}${String(b.race.raceNo).padStart(2,"0")}`));return new Response(JSON.stringify({ok:true,count:races.length,races,warnings}),{headers})}catch(e){return new Response(JSON.stringify({ok:false,error:String(e),races:[]}),{headers,status:200})}}};
+export default {
+  async fetch(request) {
+    const headers = cors();
+    if (request.method === 'OPTIONS') return new Response('ok', { headers });
+    const url = new URL(request.url);
+    if (url.pathname !== '/api/schedule') return json({ ok:false, error:'not found', path:url.pathname }, 404, headers);
+    const today = new Date();
+    const races = sampleSchedule(today);
+    return json({ ok:true, source:'worker-schedule', count:races.length, races }, 200, headers);
+  }
+}
+function cors(){return {'content-type':'application/json; charset=utf-8','access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS','access-control-allow-headers':'content-type'};}
+function json(data,status=200,headers=cors()){return new Response(JSON.stringify(data,null,2),{status,headers});}
+function ymd(d){return d.toISOString().slice(0,10);}
+function sampleSchedule(base){
+  const d1 = new Date(base); d1.setDate(base.getDate()+((6-base.getDay()+7)%7));
+  const d2 = new Date(d1); d2.setDate(d1.getDate()+1);
+  const places=['東京','京都','新潟'];
+  const races=[];
+  [d1,d2].forEach((d,di)=>places.forEach(place=>{
+    for(let r=8;r<=12;r++) races.push({date:ymd(d),place,raceNo:String(r),raceName:`${place}${r}R`,grade:r===11?(di?'G2':'G1'):(r===10?'3勝':'2勝'),surface:'芝',condition:'定量',headcount:'18',horses:[]});
+  }));
+  return races;
+}
