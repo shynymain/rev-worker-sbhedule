@@ -1,43 +1,4 @@
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
-
-    const headers = {
-      "content-type": "application/json; charset=utf-8",
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET,POST,OPTIONS",
-      "access-control-allow-headers": "content-type"
-    };
-
-    if (request.method === "OPTIONS") {
-      return new Response(JSON.stringify({ ok: true }), { headers });
-    }
-
-    if (url.pathname === "/" || url.pathname === "/api/schedule") {
-      return new Response(JSON.stringify({
-        ok: true,
-        races: [
-          {
-            date: "2026/04/30",
-            place: "東京",
-            raceNo: "11",
-            raceName: "テストレース",
-            grade: "G2",
-            surface: "芝",
-            distance: "1800m",
-            headcount: 12,
-            horses: [
-              { no: "5", name: "テストホースA", last1: "1", last2: "4", last3: "9", odds: "3.2", popularity: "2" },
-              { no: "14", name: "テストホースB", last1: "5", last2: "5", last3: "5", odds: "5.6", popularity: "4" }
-            ]
-          }
-        ]
-      }), { headers });
-    }
-
-    return new Response(JSON.stringify({
-      ok: false,
-      error: "not found"
-    }), { status: 404, headers });
-  }
-};
+const CORS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"GET,POST,OPTIONS","Access-Control-Allow-Headers":"content-type"};
+function json(x){return new Response(JSON.stringify(x),{headers:{"content-type":"application/json;charset=utf-8",...CORS}})}
+let SAMPLE={races:[{race:{id:'tokyo_11',date:'2026/04/30',place:'東京',raceNo:'11',raceName:'Worker完全自動S',grade:'G2',surface:'芝',condition:'別定',distance:'1600',headcount:'12'},horses:[['1','1','ラインソース','1','4','9','8.2'],['1','2','ファイブコア','5','5','5','3.1'],['2','3','ナインレーン','2','4','3','11.4'],['2','4','ミドルアクシス','1','5','9','6.8'],['3','5','センターライン','2','2','1','5.1'],['5','6','トライコード','6','3','8','18.4'],['6','7','サイドブリッジ','3','5','1','14.2'],['6','8','ワイドソース','4','1','4','20.5'],['7','9','オッズライン','7','2','8','30.1'],['7','10','アナザーライン','1','8','5','17.8'],['8','11','ラストグリッド','2','9','8','42.2'],['8','12','ネクストファイブ','1','5','6','7.3']].map(a=>({frame:a[0],no:a[1],name:a[2],last1:a[3],last2:a[4],last3:a[5],odds:a[6]}))}]};
+export default{async fetch(req,env){if(req.method==='OPTIONS')return new Response(null,{headers:CORS});const url=new URL(req.url);if(!url.pathname.endsWith('/api/schedule'))return json({ok:false,error:'use /api/schedule'});if(req.method==='GET')return json(SAMPLE);if(req.method==='POST'){const body=await req.json();SAMPLE=body.races?body:{races:[body]};return json({ok:true,saved:SAMPLE})}return json({ok:false,error:'method not allowed'})}}
