@@ -1,5 +1,3 @@
-name = "rev-worker-schedule"
+name = "rev-worker-sbhedule"
 main = "worker.js"
 compatibility_date = "2026-04-30"
-
-# update: force new build
